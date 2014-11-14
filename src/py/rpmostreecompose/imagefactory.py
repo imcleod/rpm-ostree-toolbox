@@ -158,6 +158,7 @@ class ImageFactoryTask(TaskBase):
         self._name = name
         self._tdl = tdl
         self._kickstart = ksfile 
+        imgfunc = ImageFunctions()
 
         [res, rev] = self.repo.resolve_rev(self.ref, False)
         [res, commit] = self.repo.load_variant(OSTree.ObjectType.COMMIT, rev)
@@ -195,10 +196,12 @@ class ImageFactoryTask(TaskBase):
         for subname, subval in substitutions.iteritems():
             ksdata = ksdata.replace('@%s@' % (subname, ), subval)
 
+        imgfunc.checkoz()
+
         parameters =  { "install_script": ksdata,
                         "generate_icicle": False,
+                        "oz_overrides": json.dumps(imgfunc.ozoverrides)
                       }
-        defaultimagetype = checkoz()
         print "Starting build"
         image = self.builder.build(template=open(self._tdl).read(), parameters=parameters)
 
@@ -207,45 +210,32 @@ class ImageFactoryTask(TaskBase):
         # image uuid
 
         # self.builder.download()
-        # myuuid = "32a2d0b8-da84-415c-aec6-90bb5a7f8e8b"
+        # myuuid = "4755687a-2c98-4466-a571-42f57805f690"
         # pim = PersistentImageManager.default_manager()
         # image = pim.image_with_id(myuuid)
 
-        # This should probably be broken out to a sep. function
+        # Copy the qcow2 file to the outputdir
+        outfile = os.path.join(outputdir, '%s.qcow2' % (self._name))
+        shutil.copyfile(image.data, outfile)
 
-        if defaultimagetype == "raw": 
-
-            # Always create a qcow2
-
-            print "Processing image from raw to qcow2"
-            print image.data
-            outputname = os.path.join(outputdir, '%s.qcow2' % (self._name))
-            print outputname
-
-            # We use compat=0.10 to ensure we run on RHEL6 era QEMU
-            qemucmd = ['qemu-img', 'convert', '-f', 'raw', '-O', 'qcow2', '-o', 'compat=0.10', image.data, outputname]
-            imageouttypes.pop(imageouttypes.index("kvm"))
-            subprocess.check_call(qemucmd)
-
-        if 'kvm' in imageouttypes:
+        if 'raw' in imageouttypes:
             print "Processing image from qcow2 to raw"
             print image.data
             outputname = os.path.join(outputdir, '%s.raw' % (self._name))
-            print outputname 
-
+            print outputname
             qemucmd = ['qemu-img', 'convert', '-f', 'raw', '-O', 'qcow2', image.data, outputname]
             imageouttypes.pop(imageouttypes.index("raw"))
             subprocess.check_call(qemucmd)
-
-        shutil.copyfile(image.data, target)
-        print "Created: " + target
+            shutil.copyfile(image.data, target)
+            print "Created: " + target
 
         for imagetype in imageouttypes:
-            print "Creating {0} image".format(imagetype)
-            target_image = self.builder.buildimagetype(imagetype, image.identifier)
-            infile = target_image.data
-            outfile = os.path.join(outputdir, '%s-%s.ova' % (self._name, imagetype))
-            shutil.copyfile(infile, outfile)
+            if (imagetype == 'vsphere') or (imagetype == 'rhevm'):
+                print "Creating {0} image".format(imagetype)
+                target_image = self.builder.buildimagetype(imagetype, image.identifier)
+                infile = target_image.data
+                outfile = os.path.join(outputdir, '%s-%s.ova' % (self._name, imagetype))
+                shutil.copyfile(infile, outfile)
 
     @property
     def builder(self):
@@ -257,32 +247,41 @@ class ImageFactoryTask(TaskBase):
 
 ## End Composer
 
+class ImageFunctions(object):
+    def __init__(self):
+        self.ozoverrides = {}
+        self.cfg = INIConfig(open('/etc/oz/oz.cfg'))
 
-def checkoz():
-    """
-    Method which checks the oz.cfg for certain variables to alert
-    user to potential errors caused by the cfg itself. It also
-    returns the default image type.
-    """
-    cfg = INIConfig(open('/etc/oz/oz.cfg'))
-    if cfg.libvirt.image_type == "qcow2":
-        print" The default image type in /etc/oz/oz.cfg must be 'raw'.  Please correct this and rerun rpm-ostree-toolbox."
-        exit(1)
-    else:
-        print "Your default image will be of {0} format".format(cfg.libvirt.image_type)
+    def addozoverride(self, cfgsec, key, value):
+        """
+        Method that takes oz config section and adds a key
+        and value to prepare an json formatted oz override
+        value
+        """
+        if cfgsec not in self.ozoverrides.keys():
+            self.ozoverrides[cfgsec] = {}
+        self.ozoverrides[cfgsec][key] = value
 
-    # iniparse returns an object if it cannot find the config option
-    # we check if the the return is a str and assume if not, it does
-    # not exist
+    def checkoz(self):
+        """
+        Method which checks the oz.cfg for certain variables to alert
+        user to potential errors caused by the cfg itself. It also
+        returns the default image type.
+        """
+        cfg = INIConfig(open('/etc/oz/oz.cfg'))
 
-    if not isinstance(cfg.libvirt.memory, str):
-        print "Your current configuration in /etc/oz/oz.cfg does not define a memory amount for libvirt.  Consider defining it to at least 2048 to avoid image creation failures"
-        exit(1)
-    else:
-        if int(cfg.libvirt.memory) < 2049:
-            print "Your current oz configuration specifies a memory amount of less than 2048 which can lead to possible image creation failures."
-            exit(1)
-    return cfg.libvirt.image_type
+        # Set default image to always be KVM
+        self.addozoverride('libvirt', 'image_type', 'qcow2')
+
+        # iniparse returns an object if it cannot find the config option
+        # we check if the the return is a str and assume if not, it does
+        # not exist
+
+        if int(cfg.libvirt.memory) < 2048:
+            print "Your current oz configuration specifies a memory amount of less than 2048 which can lead to possible image creation failures. Overriding temporarily to 2048"
+            self.addozoverride('libvirt', 'memory', 2048)
+
+
 
 def parseimagetypes(imagetypes):
     default_image_types = ["kvm", "raw", "vsphere", "rhevm"]
@@ -294,10 +293,6 @@ def parseimagetypes(imagetypes):
         if i not in default_image_types:
             print "{0} is not a valid image type.  The valid types are {1}".format(i, default_image_types)
             exit(1) 
-
-    if 'kvm' not in imagetypes:
-        print "An image type of 'kvm'. Adding kvm as an image type."
-        imagetypes.append("kvm")
 
     return imagetypes
 
