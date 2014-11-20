@@ -40,16 +40,19 @@ def usage(iserr):
     sys.exit(1 if iserr else 0)
 
 if __name__ == '__main__':
+    if os.getuid() != 0:
+        print "\nrpm-ostee-toolbox requires you to run as sudo"
+        exit(1)
     print "%r" % (sys.argv, )
     if len(sys.argv) <= 1:
         usage(False)
     cmd = sys.argv.pop(1)
     if cmd == 'imagefactory':
-        imagefactory.main()
+        imagefactory.main(cmd)
     elif cmd == 'installer':
-        installer.main()
+        installer.main(cmd)
     elif cmd == 'treecompose':
-        treecompose.main()
+        treecompose.main(cmd)
     elif cmd == 'taskrunner':
         taskrunner.main()
     elif cmd in ['create-vm-disk', 'postprocess-disk', 'trivial-autocompose']:
