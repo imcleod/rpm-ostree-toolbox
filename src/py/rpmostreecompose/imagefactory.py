@@ -319,7 +319,7 @@ def main(cmd):
     parser.add_argument('--tdl', type=str, required=False, help='TDL file')
     parser.add_argument('-o', '--outputdir', type=str, required=False, help='Path to image output directory')
     parser.add_argument('-k', '--kickstart', type=str, required=False, help='Path to kickstart') 
-    parser.add_argument('-p', '--profile', type=str, default='DEFAULT', help='Profile to compose (references a config file section)')
+    parser.add_argument('-p', '--profile', type=str, default='DEFAULT', help='Profile to compose (references a stanza in the config file)')
     parser.add_argument('-v', '--verbose', action='store_true', help='verbose output')
     args = parser.parse_args()
      
