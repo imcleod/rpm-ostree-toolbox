@@ -36,6 +36,7 @@ class TaskBase(object):
               'selinux', 'output_repodata_dir', 'configdir'
             ]
 
+
     def __init__(self, args, cmd, profile=None):
         self._repo = None
         configfile = args.config
@@ -79,14 +80,14 @@ class TaskBase(object):
         if 'outputdir' in args and args.outputdir is not None:
             setattr(self, 'outputdir', args.outputdir)
 
-        os_nr = "{0}-{1}".format(getattr(self, 'os_name'), getattr(self, 'release'))
+        self.os_nr = "{0}-{1}".format(getattr(self, 'os_name'), getattr(self, 'release'))
 
         # Set kickstart file from args, else fallback to default
         if cmd == "imagefactory":
             if 'kickstart' in args and args.kickstart is not None:
                 setattr(self, 'kickstart', args.kickstart)
             else:
-                defks = "{0}.ks".format(os_nr)
+                defks = "{0}.ks".format(self.os_nr)
 
                 setattr(self, 'kickstart', '{0}'.format(os.path.join(
                     getattr(self, 'configdir'), defks)))
@@ -98,7 +99,7 @@ class TaskBase(object):
             if 'tdl' in args and args.tdl is not None:
                 setattr(self, 'tdl', args.tdl)
             else:
-                deftdl = "{0}.tdl".format(os_nr)
+                deftdl = "{0}.tdl".format(self.os_nr)
                 setattr(self, 'tdl', '{0}'.format(os.path.join(
                     getattr(self, 'configdir'), deftdl)))
                 if not os.path.exists(getattr(self, 'tdl')):
@@ -108,7 +109,7 @@ class TaskBase(object):
         if 'name' in args and args.name is not None:
             setattr(self, 'name', args.name)
         else:
-            setattr(self, 'name', '{0}'.format(os_nr))
+            setattr(self, 'name', '{0}'.format(self.os_nr))
 
         if cmd == "installer":
             if not self.yum_baseurl and args.yum_baseurl == None:
