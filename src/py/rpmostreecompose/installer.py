@@ -101,9 +101,9 @@ ADD lorax.repo /etc/yum.repos.d/
 ADD lorax.tmpl /root/
 ADD lorax.sh /root/
 RUN chmod u+x /root/lorax.sh
+RUN yum -y update
 RUN yum -y swap fakesystemd systemd
 RUN yum -y install ostree lorax
-RUN yum -y update
 
 CMD ["/bin/sh", "/root/lorax.sh"]
         """
@@ -224,7 +224,7 @@ CMD ["/bin/sh", "/root/lorax.sh"]
                          'OS_VER': self.release
                          }
         if '@OSTREE_HOSTIP@' in util_xml:
-            host_ip = getDefaultIP()
+            host_ip = getDefaultIP(nethost=self.virtnetwork)
             substitutions['OSTREE_HOSTIP'] = host_ip
 
         print type(util_xml)
@@ -284,6 +284,7 @@ def main(cmd):
     parser.add_argument('--util_tdl', required=False, default=None, type=str, help='The TDL for the utility image')
     parser.add_argument('-v', '--verbose', action='store_true', help='verbose output')
     parser.add_argument('--virt', action='store_true', help='Use libvirt')
+    parser.add_argument('--virtnetwork', default=None, type=str, required=False, help='Optional name of libvirt network')
     parser.add_argument('--post', type=str, help='Run this %%post script in interactive installs')
     parser.add_argument('-o', '--outputdir', type=str, required=False, help='Path to image output directory')
     args = parser.parse_args()
