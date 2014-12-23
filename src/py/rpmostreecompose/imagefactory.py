@@ -114,6 +114,10 @@ class ImgFacBuilder(ImgBuilder):
         uuid and outputputting various image formats
         """
         print "Working on a {0} for {1}".format(imagetype, baseid)
+        vagrant = False
+        if imagetype == "vagrant":
+            vagrant = True
+            imagetype = "vsphere"
         bd = BuildDispatcher()
         imagebuilder = bd.builder_for_target_image(imagetype, image_id=baseid, template=None, parameters=imgopts)
         target_image = imagebuilder.target_image
@@ -128,6 +132,9 @@ class ImgFacBuilder(ImgBuilder):
         print "Creating OVA for {0}".format(imagetype)
 
         bdi = BuildDispatcher()
+        if vagrant:
+            imgopts['ova_format'] = 'virtualbox'
+
         ovabuilder = bdi.builder_for_target_image("ova", image_id=target_image.identifier, template=None, parameters=imgopts)
         target_ova = ovabuilder.target_image
         ovathread = ovabuilder.target_thread
@@ -239,11 +246,19 @@ class ImageFactoryTask(TaskBase):
             imageouttypes.pop(imageouttypes.index("raw"))
             print "Created: {0}".format(outputname)
 
-        for imagetype in imageouttypes:
-            if imagetype in ['vsphere', 'rhevm']:
+        if 'hyperv' in imageouttypes:
+            print image.data
+            outputname = os.path.join(imageoutputdir, '%s.vhd' % (self.os_nr))
+            # We can only create a gen1 hyperv image with no ova right now
+            qemucmd = ['qemu-img', 'convert', '-f', 'qcow2', '-O', 'vpc', image.data, outputname]
+            subprocess.check_call(qemucmd)
+            imageouttypes.pop(imageouttypes.index("hyperv"))
+            print "Created: {0}".format(outputname)
 
-                # Imgfac will ensure proper qemu type is used
+        for imagetype in imageouttypes:
+            if imagetype in ['vsphere', 'rhevm', 'vagrant']:
                 print "Creating {0} image".format(imagetype)
+                # Imgfac will ensure proper qemu type is used
                 target_image = self.builder.buildimagetype(imagetype, image.identifier)
                 infile = target_image.data
                 outfile = os.path.join(imageoutputdir, '%s-%s.ova' % (self._name, imagetype))
@@ -339,7 +354,7 @@ class ImageFunctions(object):
         print "Oz overrides: {0}".format(self.ozoverrides)
 
 def parseimagetypes(imagetypes):
-    default_image_types = ["kvm", "raw", "vsphere", "rhevm"]
+    default_image_types = ["kvm", "raw", "vsphere", "rhevm", "vagrant", "hyperv"]
     if imagetypes == None:
         return default_image_types
 
