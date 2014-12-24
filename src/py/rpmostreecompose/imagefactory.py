@@ -115,9 +115,12 @@ class ImgFacBuilder(ImgBuilder):
         """
         print "Working on a {0} for {1}".format(imagetype, baseid)
         vagrant = False
-        if imagetype == "vagrant":
+        if imagetype == "vagrant-virtualbox":
             vagrant = True
             imagetype = "vsphere"
+        if imagetype == "vagrant-libvirt":
+            vagrant = True
+            imagetype = "rhevm"
         bd = BuildDispatcher()
         imagebuilder = bd.builder_for_target_image(imagetype, image_id=baseid, template=None, parameters=imgopts)
         target_image = imagebuilder.target_image
@@ -133,7 +136,10 @@ class ImgFacBuilder(ImgBuilder):
 
         bdi = BuildDispatcher()
         if vagrant:
-            imgopts['ova_format'] = 'virtualbox'
+            if imagetype == "vsphere":
+                imgopts['ova_format_vsphere'] = 'virtualbox'
+            if imagetype == "rhevm":
+                imgopts['ova_format_rhevm'] = 'libvirt-vagrant'
 
         ovabuilder = bdi.builder_for_target_image("ova", image_id=target_image.identifier, template=None, parameters=imgopts)
         target_ova = ovabuilder.target_image
